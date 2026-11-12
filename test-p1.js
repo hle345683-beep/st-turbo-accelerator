@@ -20,7 +20,7 @@ const REAL_CHAT_PATH = getChatPath('D:\\ST\\SillyTavern\\data\\default-user\\cha
 const REAL_CARD_PATH = getCardPath('D:\\ST\\SillyTavern\\data\\default-user\\characters\\Genshin Impact · Teyvat3.png');
 
 // Thư mục tạm test an toàn (Blast Radius isolation)
-const TEST_DIR = path.resolve(__dirname, 'test_sandbox_p1');
+const TEST_DIR = path.resolve(__dirname, 'test-sandbox-p1');
 if (!fs.existsSync(TEST_DIR)) {
     fs.mkdirSync(TEST_DIR, { recursive: true });
 }

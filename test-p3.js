@@ -371,10 +371,29 @@ async function main() {
         assert(!cleanObj.variables.hasOwnProperty('temporary_buff'));
         assert.strictEqual(originalMetadata.variables.temporary_buff, "attack+10");
 
+        // 5. Kiểm thử Array mutation & non-configurable property invariants
+        const originalArray = [10, 20, 30];
+        const arrayProxy = ProxyVariableGuard.createCoWProxy(originalArray);
+        arrayProxy.push(40);
+        assert.strictEqual(arrayProxy.length, 4);
+        assert.strictEqual(originalArray.length, 3, 'Array gốc không bị đột biến');
+        const committedArr = arrayProxy.commit();
+        assert.strictEqual(committedArr.length, 4);
+        assert.strictEqual(committedArr[3], 40);
+
+        // 6. Kiểm thử bảo toàn thuộc tính commit của đối tượng người dùng
+        const objWithCommitKey = { commit: 'git-rev-a1b2c3', status: 'ok' };
+        const proxyWithCommitKey = ProxyVariableGuard.createCoWProxy(objWithCommitKey);
+        assert.strictEqual(proxyWithCommitKey.commit, 'git-rev-a1b2c3', 'Thuộc tính commit của user phải được bảo toàn');
+        const jsonWithCommit = JSON.stringify(proxyWithCommitKey);
+        assert(jsonWithCommit.includes('"commit":"git-rev-a1b2c3"'), 'JSON.stringify không được làm mất thuộc tính commit của user');
+
         console.log(`\n       - Đọc CoW Proxy: user_name = "${cowProxy.user_name}"`);
         console.log(`       - Giá trị sửa trên Proxy: player_hp = ${cowProxy.variables.player_hp}`);
         console.log(`       - Xóa an toàn: temporary_buff bị xóa khỏi proxy nhưng còn nguyên trên object gốc`);
         console.log(`       - Commit sạch sẽ không chứa proxy trap`);
+        console.log(`       - Array push & non-configurable invariants hoạt động chuẩn xác`);
+        console.log(`       - Bảo toàn thuộc tính commit của user khi xuất JSON: ${jsonWithCommit}`);
     });
 
     // =========================================================================

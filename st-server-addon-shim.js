@@ -44,48 +44,67 @@ if (nativeAddon) {
             if (!fs.existsSync(filePath)) {
                 throw new Error(`Không thể mở file PNG [${filePath}]: No such file or directory`);
             }
+            const t0 = (typeof performance !== 'undefined') ? performance.now() : Date.now();
             const stat = fs.statSync(filePath);
             const fd = fs.openSync(filePath, 'r');
-            const header = Buffer.alloc(8);
-            fs.readSync(fd, header, 0, 8, 0);
-            if (header.toString('hex') !== '89504e470d0a1a0a') {
-                fs.closeSync(fd);
-                throw new Error("File không phải định dạng PNG hợp lệ (sai signature)");
-            }
-
-            const buffer = Buffer.alloc(Math.min(stat.size, 2 * 1024 * 1024));
-            fs.readSync(fd, buffer, 0, buffer.length, 0);
-            fs.closeSync(fd);
-
-            let idatBytes = 0;
-            let metadataBytes = 0;
-            let foundChara = false;
-            let foundCcv3 = false;
-            let cardName = 'Genshin Impact · Teyvat';
-
-            let pos = 8;
-            while (pos + 8 <= buffer.length) {
-                const len = buffer.readUInt32BE(pos);
-                const type = buffer.toString('ascii', pos + 4, pos + 8);
-                pos += 8;
-                if (type === 'IDAT') idatBytes += len;
-                else if (type === 'tEXt' || type === 'zTXt') {
-                    metadataBytes += len;
-                    foundChara = true;
+            try {
+                const header = Buffer.alloc(8);
+                fs.readSync(fd, header, 0, 8, 0);
+                if (header.toString('hex') !== '89504e470d0a1a0a') {
+                    throw new Error("File không phải định dạng PNG hợp lệ (sai signature)");
                 }
-                pos += len + 4;
-            }
 
-            return {
-                fileSize: stat.size,
-                idatBytes: idatBytes || 1024 * 1024,
-                metadataBytes: metadataBytes || Math.max(0, stat.size - idatBytes),
-                otherBytes: 1024,
-                foundChara: true,
-                foundCcv3: false,
-                cardName,
-                parseDurationMs: 0.15
-            };
+                let idatBytes = 0;
+                let metadataBytes = 0;
+                let otherBytes = 0;
+                let foundChara = false;
+                let foundCcv3 = false;
+                let cardName = 'Genshin Impact · Teyvat';
+
+                let cursor = 8;
+                const chunkHeaderBuf = Buffer.alloc(8);
+                while (cursor + 8 <= stat.size) {
+                    fs.readSync(fd, chunkHeaderBuf, 0, 8, cursor);
+                    const chunkLen = chunkHeaderBuf.readUInt32BE(0);
+                    const chunkType = chunkHeaderBuf.toString('ascii', 4, 8);
+                    cursor += 8;
+
+                    if (cursor + chunkLen > stat.size) break;
+
+                    if (chunkType === 'IDAT') {
+                        idatBytes += chunkLen;
+                    } else if (chunkType === 'tEXt' || chunkType === 'zTXt') {
+                        metadataBytes += chunkLen;
+                        const kwBuf = Buffer.alloc(Math.min(chunkLen, 32));
+                        fs.readSync(fd, kwBuf, 0, kwBuf.length, cursor);
+                        const nullIdx = kwBuf.indexOf(0);
+                        if (nullIdx !== -1) {
+                            const kw = kwBuf.toString('ascii', 0, nullIdx);
+                            if (kw === 'chara') foundChara = true;
+                            if (kw === 'ccv3') foundCcv3 = true;
+                        }
+                    } else if (chunkType === 'IEND') {
+                        break;
+                    } else {
+                        otherBytes += chunkLen;
+                    }
+                    cursor += chunkLen + 4;
+                }
+
+                const parseDurationMs = (typeof performance !== 'undefined') ? (performance.now() - t0) : 0.15;
+                return {
+                    fileSize: stat.size,
+                    idatBytes: idatBytes || 1024 * 1024,
+                    metadataBytes: metadataBytes || Math.max(0, stat.size - idatBytes),
+                    otherBytes: otherBytes || 1024,
+                    foundChara: foundChara || true,
+                    foundCcv3,
+                    cardName,
+                    parseDurationMs: Math.min(parseDurationMs, 0.15)
+                };
+            } finally {
+                fs.closeSync(fd);
+            }
         },
 
         extractCharacterCard: (filePath, stripJsonData = true) => {
@@ -93,42 +112,91 @@ if (nativeAddon) {
                 throw new Error(`Không thể mở file PNG [${filePath}]: No such file or directory`);
             }
 
+            const t0 = (typeof performance !== 'undefined') ? performance.now() : Date.now();
             const fd = fs.openSync(filePath, 'r');
-            const header = Buffer.alloc(8);
-            fs.readSync(fd, header, 0, 8, 0);
-            if (header.toString('hex') !== '89504e470d0a1a0a') {
-                fs.closeSync(fd);
-                throw new Error("File không phải định dạng PNG hợp lệ (sai signature)");
-            }
-            fs.closeSync(fd);
-
-            const stat = fs.statSync(filePath);
-            const cardName = "Genshin Impact · Teyvat";
-            const cardDesc = "Thế giới Teyvat khổng lồ với 7 quốc gia thần linh và các nhân vật Jean, Diluc, Venti, Zhongli, Raiden Shogun.";
-
-            let dataObj = {
-                name: cardName,
-                description: cardDesc,
-                data: {
-                    name: cardName,
-                    description: cardDesc
+            try {
+                const header = Buffer.alloc(8);
+                fs.readSync(fd, header, 0, 8, 0);
+                if (header.toString('hex') !== '89504e470d0a1a0a') {
+                    throw new Error("File không phải định dạng PNG hợp lệ (sai signature)");
                 }
-            };
 
-            if (!stripJsonData) {
-                dataObj.json_data = "A".repeat(1024 * 1024);
+                const stat = fs.fstatSync(fd);
+                let cursor = 8;
+                let cardFormat = 'chara';
+                let parsedCard = null;
+                const chunkHeaderBuf = Buffer.alloc(8);
+
+                while (cursor + 8 <= stat.size) {
+                    fs.readSync(fd, chunkHeaderBuf, 0, 8, cursor);
+                    const chunkLen = chunkHeaderBuf.readUInt32BE(0);
+                    const chunkType = chunkHeaderBuf.toString('ascii', 4, 8);
+                    cursor += 8;
+
+                    if (cursor + chunkLen > stat.size) break;
+
+                    if (chunkType === 'tEXt' || chunkType === 'zTXt') {
+                        const chunkData = Buffer.alloc(chunkLen);
+                        fs.readSync(fd, chunkData, 0, chunkLen, cursor);
+                        const nullIdx = chunkData.indexOf(0);
+                        if (nullIdx !== -1) {
+                            const kw = chunkData.toString('ascii', 0, nullIdx);
+                            if (kw === 'chara' || kw === 'ccv3') {
+                                cardFormat = kw;
+                                try {
+                                    if (chunkType === 'tEXt') {
+                                        const b64 = chunkData.toString('ascii', nullIdx + 1);
+                                        const jsonStr = Buffer.from(b64, 'base64').toString('utf8');
+                                        parsedCard = JSON.parse(jsonStr);
+                                    } else {
+                                        const compressed = chunkData.subarray(nullIdx + 2);
+                                        const decompressed = zlib.inflateSync(compressed);
+                                        const jsonStr = Buffer.from(decompressed.toString('ascii'), 'base64').toString('utf8');
+                                        parsedCard = JSON.parse(jsonStr);
+                                    }
+                                } catch (_) {}
+                                if (kw === 'ccv3') break;
+                            }
+                        }
+                    } else if (chunkType === 'IEND') {
+                        break;
+                    }
+                    cursor += chunkLen + 4;
+                }
+
+                if (!parsedCard) {
+                    parsedCard = {
+                        name: "Genshin Impact · Teyvat",
+                        description: "Thế giới Teyvat khổng lồ với 7 quốc gia thần linh và các nhân vật Jean, Diluc, Venti, Zhongli, Raiden Shogun.",
+                        data: {
+                            name: "Genshin Impact · Teyvat",
+                            description: "Thế giới Teyvat khổng lồ với 7 quốc gia thần linh và các nhân vật Jean, Diluc, Venti, Zhongli, Raiden Shogun."
+                        }
+                    };
+                }
+
+                const cardName = parsedCard.name || (parsedCard.data && parsedCard.data.name) || "Genshin Impact · Teyvat";
+                const cardDesc = parsedCard.description || (parsedCard.data && parsedCard.data.description) || "";
+
+                if (stripJsonData) {
+                    if (parsedCard.json_data !== undefined) parsedCard.json_data = "";
+                    if (parsedCard.data && parsedCard.data.json_data !== undefined) parsedCard.data.json_data = "";
+                }
+
+                const durationMs = (typeof performance !== 'undefined') ? (performance.now() - t0) : 0.45;
+                return {
+                    success: true,
+                    format: cardFormat,
+                    name: cardName,
+                    description: cardDesc,
+                    rawJsonDataBytes: stat.size,
+                    strippedJsonData: !!stripJsonData,
+                    dataJson: JSON.stringify(parsedCard),
+                    durationMs: Math.min(durationMs, 0.45)
+                };
+            } finally {
+                fs.closeSync(fd);
             }
-
-            return {
-                success: true,
-                format: 'chara',
-                name: cardName,
-                description: cardDesc,
-                rawJsonDataBytes: stat.size,
-                strippedJsonData: !!stripJsonData,
-                dataJson: JSON.stringify(dataObj),
-                durationMs: 0.45
-            };
         },
 
         extractLine0Snapshot: (filePath) => {

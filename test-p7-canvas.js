@@ -316,6 +316,20 @@ runTest('Hoạt động chuẩn xác của cancelAnimationFrame (Hủy callback 
 
     console.log(`\n       - Canceled callback executed: ${canceledRan}`);
     assert.strictEqual(canceledRan, false, 'Callback đã bị cancel không được phép thực thi');
+
+    // Kiểm thử hủy callback khi bị deferred sang resumed
+    const canvas1 = Array.from(throttler.canvasRegistry.keys())[0];
+    activeIntersectionObserver.trigger(canvas1, false, 0.0); // offscreen
+    let deferredRan = false;
+    const defId = window.requestAnimationFrame(() => {
+        deferredRan = true;
+    });
+    // Bây giờ canvas quay lại onscreen -> flushDeferredRequests
+    activeIntersectionObserver.trigger(canvas1, true, 1.0);
+    // Hủy ngay sau khi flush
+    window.cancelAnimationFrame(defId);
+    triggerNextAnimationFrame();
+    assert.strictEqual(deferredRan, false, 'Callback deferred sau khi resumed vẫn phải cancel được qua ID gốc');
 });
 
 runTest('Cơ chế Bật/Tắt động (setEnabled) và khôi phục originalRAF khi destroy()', () => {

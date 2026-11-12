@@ -257,20 +257,25 @@ class CanvasThrottler {
 
     /**
      * Dispatches deferred animation frame requests when a canvas re-enters the viewport.
+     * Preserves original request IDs so cancelAnimationFrame remains functional.
      */
     flushDeferredRequests() {
         if (this.activeRequests.size === 0) return;
 
-        const deferred = [];
         for (const [id, req] of this.activeRequests) {
             if (req.isDeferred) {
-                deferred.push({ id, callback: req.callback });
+                req.isDeferred = false;
+                const originalId = this.originalRAF.call(window, (timestamp) => {
+                    this.activeRequests.delete(id);
+                    this.lastFrameTimestamp = typeof performance !== 'undefined' ? performance.now() : Date.now();
+                    try {
+                        req.callback(timestamp);
+                    } catch (err) {
+                        console.error('[ST-Rust-Canvas] Error in rAF callback execution:', err);
+                    }
+                });
+                req.originalId = originalId;
             }
-        }
-
-        for (const item of deferred) {
-            this.activeRequests.delete(item.id);
-            this.handleRequestAnimationFrame(item.callback);
         }
     }
 
@@ -476,13 +481,21 @@ class CanvasThrottler {
     destroy() {
         this.setEnabled(false);
 
-        if (typeof window !== 'undefined' && this.originalRAF) {
-            window.requestAnimationFrame = this.originalRAF;
+        if (typeof window !== 'undefined') {
+            if (this.originalRAF) {
+                window.requestAnimationFrame = this.originalRAF;
+                this.originalRAF = null;
+            }
             if (this.originalCAF) {
                 window.cancelAnimationFrame = this.originalCAF;
+                this.originalCAF = null;
             }
-            this.originalRAF = null;
-            this.originalCAF = null;
+            if (window.__ST_RUST_ORIGINAL_RAF) {
+                delete window.__ST_RUST_ORIGINAL_RAF;
+            }
+            if (window.__ST_RUST_NATIVE_RAF) {
+                delete window.__ST_RUST_NATIVE_RAF;
+            }
         }
 
         if (this.intersectionObserver) {

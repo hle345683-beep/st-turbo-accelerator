@@ -12,7 +12,10 @@ Cargo.lock
 /libnode/
 
 # Test sandboxes
+/test-sandbox-*/
 /test_sandbox_*/
+test-p*-sandbox*
+test-p*-soak*
 *.tmp.*
 /fixtures/
 *.meta.json

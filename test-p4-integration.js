@@ -55,7 +55,7 @@ async function runAllTests() {
     // =========================================================================
     console.log(`=== PHẦN 1: KIỂM TRA TÍCH HỢP EXTENSION CLIENT TRONG SILLYTAVERN ===`);
 
-    runTest('Kiểm tra thư mục Extension Client đích tại public/scripts/extensions/third-party/', () => {
+    await runTest('Kiểm tra thư mục Extension Client đích tại public/scripts/extensions/third-party/', () => {
         assert(fs.existsSync(EXTENSION_DEST), `Thư mục extension không tồn tại: ${EXTENSION_DEST}`);
         
         const requiredFiles = [
@@ -100,7 +100,7 @@ async function runAllTests() {
     // =========================================================================
     console.log(`\n=== PHẦN 2: KIỂM TRA TÍCH HỢP SERVER PLUGIN TRONG SILLYTAVERN ===`);
 
-    runTest('Kiểm tra thư mục Server Plugin đích tại plugins/st-rust-accelerator/', () => {
+    await runTest('Kiểm tra thư mục Server Plugin đích tại plugins/st-rust-accelerator/', () => {
         assert(fs.existsSync(PLUGIN_DEST), `Thư mục plugin không tồn tại: ${PLUGIN_DEST}`);
         assert(fs.existsSync(path.join(PLUGIN_DEST, 'package.json')), 'Thiếu package.json');
         assert(fs.existsSync(path.join(PLUGIN_DEST, 'index.js')), 'Thiếu index.js');
@@ -194,7 +194,7 @@ async function runAllTests() {
     });
 
     runTest('Append tin nhắn delta an toàn vào file sandbox mà không đổi format RFC JSONL', () => {
-        const sandboxChat = path.resolve(__dirname, 'test_p4_sandbox.jsonl');
+        const sandboxChat = path.resolve(__dirname, 'test-p4-sandbox.jsonl');
         fs.writeFileSync(sandboxChat, '{"user_name":"Sensei","character_name":"Tawa"}\n{"name":"Tawa","mes":"Hello"}\n');
 
         const newMsg = { name: "Sensei", mes: "Tin nhắn kiểm thử Phase P4 Integration 🌸✨🧠" };

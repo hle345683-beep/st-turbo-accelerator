@@ -50,16 +50,16 @@ async function initWasm(options = {}) {
 
             if (typeof WebAssembly.instantiateStreaming === 'function') {
                 try {
-                    await wasmGlue.default(wasmUrl);
+                    await wasmGlue.default({ module_or_path: wasmUrl });
                 } catch (_) {
                     const response = await fetch(wasmUrl);
                     const bytes = await response.arrayBuffer();
-                    await wasmGlue.default(bytes);
+                    await wasmGlue.default({ module_or_path: bytes });
                 }
             } else {
                 const response = await fetch(wasmUrl);
                 const bytes = await response.arrayBuffer();
-                await wasmGlue.default(bytes);
+                await wasmGlue.default({ module_or_path: bytes });
             }
 
             _shared.wasmInstance = wasmGlue;
@@ -221,6 +221,20 @@ function getMessageFromVault(index) {
         console.error(`[ST-Rust] Lỗi đọc tin nhắn #${index} từ Vault:`, err);
         const raw = _shared.fallbackVaultMessages.get(index);
         return raw ? JSON.parse(raw) : null;
+    }
+}
+
+/**
+ * Kiểm tra xem tin nhắn có tồn tại trong WASM Vault hay không.
+ */
+function hasMessageInVault(index) {
+    if (!isWasmReady()) {
+        return _shared.fallbackVaultMessages.has(index);
+    }
+    try {
+        return _shared.wasmInstance.vault_has_message(index);
+    } catch (_) {
+        return _shared.fallbackVaultMessages.has(index);
     }
 }
 
@@ -415,6 +429,7 @@ export {
     getLine0FromVault,
     storeMessageInVault,
     getMessageFromVault,
+    hasMessageInVault,
     assembleContextFromVault,
     buildWorldbookMatcher,
     scanWorldbookFast,
@@ -433,6 +448,7 @@ if (typeof module !== 'undefined' && module.exports) {
         getLine0FromVault,
         storeMessageInVault,
         getMessageFromVault,
+        hasMessageInVault,
         assembleContextFromVault,
         buildWorldbookMatcher,
         scanWorldbookFast,

@@ -38,6 +38,7 @@ class VirtualScroller {
         this.spacerBottom = null;
         
         this.isTicking = false;
+        this.isUpdating = false;
         this.isEnabled = true;
         this.lastScrollTop = 0;
         this.visibleRange = { start: 0, end: 0 };
@@ -103,9 +104,13 @@ class VirtualScroller {
 
     /**
      * Handles DOM mutations and measures heights of new items.
+     * Schedules scroller update if mutation occurred externally.
      */
     onDomMutated() {
         this.measureElements();
+        if (!this.isUpdating) {
+            this.onScroll();
+        }
     }
 
     /**
@@ -131,118 +136,130 @@ class VirtualScroller {
     update() {
         if (!this.container || !this.isEnabled) return;
 
-        const allMesNodes = Array.from(this.container.querySelectorAll('.mes'));
-        if (allMesNodes.length <= this.maxVisibleItems && this.messageNodes.size === 0) {
-            if (this.spacerTop) this.spacerTop.style.height = '0px';
-            if (this.spacerBottom) this.spacerBottom.style.height = '0px';
-            return;
-        }
+        this.isUpdating = true;
+        try {
+            const allMesNodes = Array.from(this.container.querySelectorAll('.mes'));
+            if (allMesNodes.length <= this.maxVisibleItems && this.messageNodes.size === 0) {
+                if (this.spacerTop) this.spacerTop.style.height = '0px';
+                if (this.spacerBottom) this.spacerBottom.style.height = '0px';
+                return;
+            }
 
-        allMesNodes.forEach(node => {
-            const mesId = parseInt(node.getAttribute('mesid'), 10);
-            if (!isNaN(mesId)) {
-                if (!this.messageNodes.has(mesId)) {
-                    this.messageNodes.set(mesId, node);
+            allMesNodes.forEach(node => {
+                const mesId = parseInt(node.getAttribute('mesid'), 10);
+                if (!isNaN(mesId)) {
+                    if (!this.messageNodes.has(mesId)) {
+                        this.messageNodes.set(mesId, node);
+                    }
+                    const h = node.getBoundingClientRect().height;
+                    if (h > 0) this.heightCache.set(mesId, h);
                 }
-                const h = node.getBoundingClientRect().height;
-                if (h > 0) this.heightCache.set(mesId, h);
+            });
+
+            const allIds = Array.from(this.messageNodes.keys()).sort((a, b) => a - b);
+            const totalCount = allIds.length;
+            if (totalCount === 0) return;
+            this.totalMessages = totalCount;
+
+            const scrollTop = this.container.scrollTop;
+            const clientHeight = this.container.clientHeight || 800;
+            const buffer = clientHeight * this.bufferRatio;
+
+            const viewportTop = Math.max(0, scrollTop - buffer);
+            const viewportBottom = scrollTop + clientHeight + buffer;
+
+            let accumulatedHeight = 0;
+            let startIndex = 0;
+            let endIndex = totalCount - 1;
+            let foundStart = false;
+
+            const heights = [];
+            for (let idx = 0; idx < totalCount; idx++) {
+                const mesId = allIds[idx];
+                const h = this.heightCache.get(mesId) || this.estimatedItemHeight;
+                heights.push(h);
+
+                const itemTop = accumulatedHeight;
+                const itemBottom = accumulatedHeight + h;
+                accumulatedHeight += h;
+
+                if (!foundStart && itemBottom >= viewportTop) {
+                    startIndex = idx;
+                    foundStart = true;
+                }
+
+                if (itemTop <= viewportBottom) {
+                    endIndex = idx;
+                }
             }
-        });
 
-        const totalCount = this.messageNodes.size;
-        if (totalCount === 0) return;
-
-        const scrollTop = this.container.scrollTop;
-        const clientHeight = this.container.clientHeight || 800;
-        const buffer = clientHeight * this.bufferRatio;
-
-        const viewportTop = Math.max(0, scrollTop - buffer);
-        const viewportBottom = scrollTop + clientHeight + buffer;
-
-        let accumulatedHeight = 0;
-        let startIndex = 0;
-        let endIndex = totalCount - 1;
-        let foundStart = false;
-
-        const heights = [];
-        for (let i = 0; i < totalCount; i++) {
-            const h = this.heightCache.get(i) || this.estimatedItemHeight;
-            heights.push(h);
-
-            const itemTop = accumulatedHeight;
-            const itemBottom = accumulatedHeight + h;
-            accumulatedHeight += h;
-
-            if (!foundStart && itemBottom >= viewportTop) {
-                startIndex = i;
-                foundStart = true;
+            const windowSize = endIndex - startIndex + 1;
+            if (windowSize > this.maxVisibleItems) {
+                endIndex = Math.min(totalCount - 1, startIndex + this.maxVisibleItems - 1);
             }
 
-            if (itemTop <= viewportBottom) {
-                endIndex = i;
+            const isNearBottom = (this.container.scrollHeight - this.container.scrollTop - clientHeight) < 150;
+            if (isNearBottom) {
+                endIndex = totalCount - 1;
+                startIndex = Math.max(0, endIndex - this.maxVisibleItems + 1);
             }
-        }
 
-        const windowSize = endIndex - startIndex + 1;
-        if (windowSize > this.maxVisibleItems) {
-            endIndex = Math.min(totalCount - 1, startIndex + this.maxVisibleItems - 1);
-        }
+            let topSpacerHeight = 0;
+            for (let idx = 0; idx < startIndex; idx++) {
+                topSpacerHeight += heights[idx] || this.estimatedItemHeight;
+            }
 
-        const isNearBottom = (this.container.scrollHeight - this.container.scrollTop - clientHeight) < 150;
-        if (isNearBottom) {
-            endIndex = totalCount - 1;
-            startIndex = Math.max(0, endIndex - this.maxVisibleItems + 1);
-        }
+            let bottomSpacerHeight = 0;
+            for (let idx = endIndex + 1; idx < totalCount; idx++) {
+                bottomSpacerHeight += heights[idx] || this.estimatedItemHeight;
+            }
 
-        let topSpacerHeight = 0;
-        for (let i = 0; i < startIndex; i++) {
-            topSpacerHeight += heights[i] || this.estimatedItemHeight;
-        }
+            if (this.spacerTop) this.spacerTop.style.height = `${topSpacerHeight}px`;
+            if (this.spacerBottom) this.spacerBottom.style.height = `${bottomSpacerHeight}px`;
 
-        let bottomSpacerHeight = 0;
-        for (let i = endIndex + 1; i < totalCount; i++) {
-            bottomSpacerHeight += heights[i] || this.estimatedItemHeight;
-        }
+            for (let idx = 0; idx < totalCount; idx++) {
+                const mesId = allIds[idx];
+                const node = this.messageNodes.get(mesId);
+                if (!node) continue;
 
-        if (this.spacerTop) this.spacerTop.style.height = `${topSpacerHeight}px`;
-        if (this.spacerBottom) this.spacerBottom.style.height = `${bottomSpacerHeight}px`;
+                const isVisible = (idx >= startIndex && idx <= endIndex);
+                const isInDom = node.parentNode === this.container;
 
-        for (let i = 0; i < totalCount; i++) {
-            const node = this.messageNodes.get(i);
-            if (!node) continue;
+                if (isVisible) {
+                    // Sửa lỗi đảo ngược thứ tự tin nhắn khi cuộn lên:
+                    // Tìm DOM node kế tiếp hợp lệ có index > idx đang gắn trên container
+                    let nextNode = this.spacerBottom;
+                    for (let k = idx + 1; k < totalCount; k++) {
+                        const candidate = this.messageNodes.get(allIds[k]);
+                        if (candidate && candidate.parentNode === this.container) {
+                            nextNode = candidate;
+                            break;
+                        }
+                    }
 
-            const isVisible = (i >= startIndex && i <= endIndex);
-            const isInDom = node.parentNode === this.container;
-
-            if (isVisible) {
-                // Sửa lỗi đảo ngược thứ tự tin nhắn khi cuộn lên:
-                // Tìm DOM node kế tiếp hợp lệ có index > i đang gắn trên container
-                let nextNode = this.spacerBottom;
-                for (let k = i + 1; k < totalCount; k++) {
-                    const candidate = this.messageNodes.get(k);
-                    if (candidate && candidate.parentNode === this.container) {
-                        nextNode = candidate;
-                        break;
+                    if (!isInDom) {
+                        this.container.insertBefore(node, nextNode);
+                    } else if (node.nextSibling !== nextNode) {
+                        // Đảm bảo đúng thứ tự tuyệt đối trên DOM
+                        this.container.insertBefore(node, nextNode);
+                    }
+                } else if (!isVisible && isInDom) {
+                    node.remove();
+                    if (typeof this.onMessageEvicted === 'function') {
+                        try {
+                            this.onMessageEvicted(mesId, node);
+                        } catch (_) {}
                     }
                 }
-
-                if (!isInDom) {
-                    this.container.insertBefore(node, nextNode);
-                } else if (node.nextSibling !== nextNode) {
-                    // Đảm bảo đúng thứ tự tuyệt đối trên DOM
-                    this.container.insertBefore(node, nextNode);
-                }
-            } else if (!isVisible && isInDom) {
-                node.remove();
-                if (typeof this.onMessageEvicted === 'function') {
-                    try {
-                        this.onMessageEvicted(i, node);
-                    } catch (_) {}
-                }
             }
-        }
 
-        this.visibleRange = { start: startIndex, end: endIndex };
+            this.visibleRange = {
+                start: allIds[startIndex] !== undefined ? allIds[startIndex] : startIndex,
+                end: allIds[endIndex] !== undefined ? allIds[endIndex] : endIndex
+            };
+        } finally {
+            this.isUpdating = false;
+        }
     }
 
     /**
@@ -253,8 +270,10 @@ class VirtualScroller {
     setEnabled(enabled) {
         this.isEnabled = enabled;
         if (!enabled) {
-            this.messageNodes.forEach(node => {
-                if (this.container && node.parentNode !== this.container) {
+            const allIds = Array.from(this.messageNodes.keys()).sort((a, b) => a - b);
+            allIds.forEach(id => {
+                const node = this.messageNodes.get(id);
+                if (this.container && node && node.parentNode !== this.container) {
                     this.container.insertBefore(node, this.spacerBottom);
                 }
             });

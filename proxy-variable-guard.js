@@ -33,11 +33,10 @@ class ProxyVariableGuard {
                 if (prop === '__target') return obj;
                 if (prop === '__modifications') return modifications;
                 if (prop === '__deletedKeys') return deletedKeys;
-                if (prop === 'commit' || prop === '__commit') {
-                    return () => ProxyVariableGuard.commit(proxyInstance);
-                }
-                if (prop === 'toJSON') {
-                    return () => ProxyVariableGuard.commit(proxyInstance);
+
+                // Nếu khóa có giá trị sửa đổi (ưu tiên cao nhất)
+                if (modifications.has(prop)) {
+                    return modifications.get(prop);
                 }
 
                 // Nếu khóa đã bị xóa
@@ -45,9 +44,18 @@ class ProxyVariableGuard {
                     return undefined;
                 }
 
-                // Nếu khóa có giá trị sửa đổi
-                if (modifications.has(prop)) {
-                    return modifications.get(prop);
+                // Nếu obj gốc có thuộc tính commit/toJSON, ưu tiên trả về giá trị của obj
+                if (prop === 'commit' || prop === '__commit') {
+                    if (Reflect.has(obj, prop)) {
+                        return Reflect.get(obj, prop);
+                    }
+                    return () => ProxyVariableGuard.commit(proxyInstance);
+                }
+                if (prop === 'toJSON') {
+                    if (Reflect.has(obj, prop)) {
+                        return Reflect.get(obj, prop);
+                    }
+                    return () => ProxyVariableGuard.commit(proxyInstance);
                 }
 
                 // Nếu đã bọc proxy con
@@ -73,7 +81,11 @@ class ProxyVariableGuard {
             },
 
             deleteProperty(obj, prop) {
-                // Trap deleteProperty: Ghi nhận vào deletedKeys mà KHÔNG chạm vào target gốc
+                // Tuân thủ bất biến Proxy JS: không thể trả về true nếu thuộc tính non-configurable
+                const targetDesc = Reflect.getOwnPropertyDescriptor(obj, prop);
+                if (targetDesc && !targetDesc.configurable) {
+                    return false;
+                }
                 if (modifications.has(prop)) {
                     modifications.delete(prop);
                 }
@@ -85,14 +97,23 @@ class ProxyVariableGuard {
             },
 
             has(obj, prop) {
+                const targetDesc = Reflect.getOwnPropertyDescriptor(obj, prop);
+                if (targetDesc && !targetDesc.configurable) {
+                    return true;
+                }
                 if (deletedKeys.has(prop)) return false;
                 if (modifications.has(prop) || childProxies.has(prop)) return true;
                 return Reflect.has(obj, prop);
             },
 
             ownKeys(obj) {
-                const keys = new Set([...Reflect.ownKeys(obj), ...modifications.keys()]);
+                const targetKeys = Reflect.ownKeys(obj);
+                const keys = new Set([...targetKeys, ...modifications.keys()]);
                 for (const dk of deletedKeys) {
+                    const desc = Reflect.getOwnPropertyDescriptor(obj, dk);
+                    if (desc && !desc.configurable) {
+                        continue;
+                    }
                     keys.delete(dk);
                 }
                 return Array.from(keys);
@@ -102,15 +123,23 @@ class ProxyVariableGuard {
                 if (deletedKeys.has(prop)) {
                     return undefined;
                 }
+                const targetDesc = Reflect.getOwnPropertyDescriptor(obj, prop);
                 if (modifications.has(prop)) {
+                    const value = modifications.get(prop);
+                    if (targetDesc) {
+                        return {
+                            ...targetDesc,
+                            value,
+                        };
+                    }
                     return {
-                        value: modifications.get(prop),
+                        value,
                         writable: true,
                         enumerable: true,
                         configurable: true,
                     };
                 }
-                return Reflect.getOwnPropertyDescriptor(obj, prop);
+                return targetDesc;
             }
         };
 

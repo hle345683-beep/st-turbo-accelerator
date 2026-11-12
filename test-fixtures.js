@@ -14,9 +14,9 @@ if (!fs.existsSync(FIXTURES_DIR)) {
     fs.mkdirSync(FIXTURES_DIR, { recursive: true });
 }
 
-const FIXTURE_CHAT_PATH = path.join(FIXTURES_DIR, 'mock_genshin_chat.jsonl');
-const FIXTURE_CARD_PATH = path.join(FIXTURES_DIR, 'mock_genshin_card.png');
-const FIXTURE_WORLDBOOK_PATH = path.join(FIXTURES_DIR, 'mock_worldbook.json');
+const FIXTURE_CHAT_PATH = path.join(FIXTURES_DIR, 'mock-genshin-chat.jsonl');
+const FIXTURE_CARD_PATH = path.join(FIXTURES_DIR, 'mock-genshin-card.png');
+const FIXTURE_WORLDBOOK_PATH = path.join(FIXTURES_DIR, 'mock-worldbook.json');
 
 function getChatPath(preferredPath) {
     if (preferredPath && fs.existsSync(preferredPath)) {

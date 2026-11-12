@@ -64,8 +64,8 @@ async function main() {
     // =========================================================================
     console.log(`=== PHẦN 1: SOAK TEST & MEMORY LEAK AUDIT (1.000 LƯỢT) ===`);
 
-    const soakChatFile = path.resolve(__dirname, 'test_p5_soak.jsonl');
-    const soakMetaFile = path.resolve(__dirname, 'test_p5_soak.meta.json');
+    const soakChatFile = path.resolve(__dirname, 'test-p5-soak.jsonl');
+    const soakMetaFile = path.resolve(__dirname, 'test-p5-soak.meta.json');
 
     // Dọn dẹp trước
     if (fs.existsSync(soakChatFile)) fs.unlinkSync(soakChatFile);

@@ -7,14 +7,14 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 
 const suites = [
-    { name: 'P1: WAL Engine & Fast PNG Metadata Extractor', file: 'test_p1.js' },
-    { name: 'P2: WASM LZ4 Chat Vault & Memory Compaction', file: 'test_p2.js' },
-    { name: 'P3: DOM Virtual Scroller & Anti-OOM Recycling', file: 'test_p3.js' },
-    { name: 'P4: CoW Proxy Guard & Full System Integration', file: 'test_p4_integration.js' },
-    { name: 'P5: Red-Team Security, Fuzzing & Unicode Aho-Corasick Audit', file: 'test_p5_audit.js' },
-    { name: 'P6: CSS Compositor Guard & Animation Freeze', file: 'test_p6_compositor.js' },
-    { name: 'P7: Canvas Motion Throttler (0/30/60 FPS)', file: 'test_p7_canvas.js' },
-    { name: 'P8: End-to-End System Integration & 1-Click Release', file: 'test_p8_e2e_release.js' }
+    { name: 'P1: WAL Engine & Fast PNG Metadata Extractor', file: 'test-p1.js' },
+    { name: 'P2: WASM LZ4 Chat Vault & Memory Compaction', file: 'test-p2.js' },
+    { name: 'P3: DOM Virtual Scroller & Anti-OOM Recycling', file: 'test-p3.js' },
+    { name: 'P4: CoW Proxy Guard & Full System Integration', file: 'test-p4-integration.js' },
+    { name: 'P5: Red-Team Security, Fuzzing & Unicode Aho-Corasick Audit', file: 'test-p5-audit.js' },
+    { name: 'P6: CSS Compositor Guard & Animation Freeze', file: 'test-p6-compositor.js' },
+    { name: 'P7: Canvas Motion Throttler (0/30/60 FPS)', file: 'test-p7-canvas.js' },
+    { name: 'P8: End-to-End System Integration & 1-Click Release', file: 'test-p8-e2e-release.js' }
 ];
 
 console.log('='.repeat(75));

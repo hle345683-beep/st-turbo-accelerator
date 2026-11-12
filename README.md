@@ -122,14 +122,14 @@ st-rust-accelerator/
 │   ├── COMPAT_MATRIX.md       # Cơ chế phòng thủ Quad-Shield chống phá vỡ khi ST cập nhật
 │   └── AUDIT_REPORT.md        # Báo cáo kiểm toán Red-Team P5 & nghiệm thu xuất xưởng
 │
-├── test_p1.js                 # Suite kiểm thử Phase P1 (11/11 tests pass)
-├── test_p2.js                 # Suite kiểm thử Phase P2 (12/12 tests pass)
-├── test_p3.js                 # Suite kiểm thử Phase P3 (9/9 tests pass)
-├── test_p4_integration.js     # Suite kiểm thử Phase P4 (8/8 tests pass)
-├── test_p5_audit.js           # Suite kiểm thử Phase P5 (7/7 tests pass)
-├── test_p6_compositor.js      # Suite kiểm thử Phase P6 (8/8 tests pass)
-├── test_p7_canvas.js          # Suite kiểm thử Phase P7 (8/8 tests pass)
-└── test_p8_e2e_release.js     # Suite kiểm thử Phase P8 (6/6 tests pass)
+├── test-p1.js                 # Suite kiểm thử Phase P1 (11/11 tests pass)
+├── test-p2.js                 # Suite kiểm thử Phase P2 (12/12 tests pass)
+├── test-p3.js                 # Suite kiểm thử Phase P3 (10/10 tests pass)
+├── test-p4-integration.js     # Suite kiểm thử Phase P4 (8/8 tests pass)
+├── test-p5-audit.js           # Suite kiểm thử Phase P5 (8/8 tests pass)
+├── test-p6-compositor.js      # Suite kiểm thử Phase P6 (8/8 tests pass)
+├── test-p7-canvas.js          # Suite kiểm thử Phase P7 (8/8 tests pass)
+└── test-p8-e2e-release.js     # Suite kiểm thử Phase P8 (6/6 tests pass)
 ```
 
 ---
