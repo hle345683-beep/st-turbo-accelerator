@@ -447,9 +447,9 @@ async function checkServerStatus() {
         badge.style.background = '#eab308';
         badge.textContent = 'Đang dò...';
 
-        let res = await originalFetch('/api/plugins/st-rust-accelerator/status').catch(() => null);
+        let res = await originalFetch('/api/plugins/st-turbo-accelerator/status').catch(() => null);
         if (!res || !res.ok) {
-            res = await originalFetch('/api/plugins/st-rust-accelerator/api/plugins/st-rust-accelerator/status').catch(() => null);
+            res = await originalFetch('/api/plugins/st-rust-accelerator/status').catch(() => null);
         }
         if (res && res.ok) {
             const data = await res.json();

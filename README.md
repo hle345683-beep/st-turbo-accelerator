@@ -47,10 +47,10 @@ Không cần tải zip, không cần gõ lệnh dòng lệnh! Bạn chỉ cần 
 3. Chọn mục **Install Extension (Cài đặt tiện ích mở rộng)**.
 4. Sao chép và dán đúng đường link GitHub này vào ô nhập URL:
    ```text
-   https://github.com/furinamikuvn/st-rust-accelerator
+   https://github.com/hle345683-beep/st-turbo-accelerator
    ```
 5. Nhấn nút **Install (Cài đặt)** $\rightarrow$ SillyTavern sẽ tự động tải về, nhận diện `manifest.json` và kích hoạt ngay lập tức!
-6. Tải lại trang (F5). Biểu tượng **🚀 ST Rust Accelerator v2.0** sẽ xuất hiện trong ngăn kéo Extensions với đầy đủ 6 công tắc bật/tắt và bảng đo telemetry thời gian thực.
+6. Tải lại trang (F5). Biểu tượng **🚀 ST Turbo Accelerator v2.0** sẽ xuất hiện trong ngăn kéo Extensions với đầy đủ 6 công tắc bật/tắt và bảng đo telemetry thời gian thực.
 7. Khi có bản cập nhật mới, bạn chỉ cần bấm **Check for Updates** ngay trên giao diện SillyTavern để nâng cấp trong 1 click.
 
 ---
@@ -59,7 +59,7 @@ Không cần tải zip, không cần gõ lệnh dòng lệnh! Bạn chỉ cần 
 
 Nếu bạn muốn chạy git clone trực tiếp vào thư mục SillyTavern:
 ```bash
-git clone --depth 1 https://github.com/furinamikuvn/st-rust-accelerator.git /path/to/SillyTavern/public/scripts/extensions/third-party/st-rust-accelerator
+git clone --depth 1 https://github.com/hle345683-beep/st-turbo-accelerator.git /path/to/SillyTavern/public/scripts/extensions/third-party/st-turbo-accelerator
 ```
 
 ---
