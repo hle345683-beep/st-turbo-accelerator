@@ -23,10 +23,12 @@ class VirtualScroller {
      */
     constructor(containerSelector = '#chat', options = {}) {
         this.containerSelector = containerSelector;
+        this.options = options;
         this.container = null;
         this.maxVisibleItems = options.maxVisibleItems || 18;
         this.bufferRatio = options.bufferRatio || 1.2;
         this.estimatedItemHeight = options.estimatedItemHeight || 120;
+        this.onMessageEvicted = options.onMessageEvicted || null;
         
         this.heightCache = new Map();
         this.messageNodes = new Map();
@@ -79,15 +81,22 @@ class VirtualScroller {
     }
 
     /**
-     * Throttles scroll updates via requestAnimationFrame.
+     * Throttles scroll updates via requestAnimationFrame không bị deadlock bởi CanvasThrottler.
      */
     onScroll() {
         if (!this.isEnabled) return;
         if (!this.isTicking) {
-            requestAnimationFrame(() => {
+            const rafFn = (typeof window !== 'undefined' && (window.__ST_RUST_ORIGINAL_RAF || window.__ST_RUST_NATIVE_RAF))
+                ? (window.__ST_RUST_ORIGINAL_RAF || window.__ST_RUST_NATIVE_RAF)
+                : (typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : setTimeout);
+
+            const scrollUpdateCb = () => {
                 this.update();
                 this.isTicking = false;
-            });
+            };
+            scrollUpdateCb.__st_unthrottled = true;
+
+            rafFn.call(typeof window !== 'undefined' ? window : globalThis, scrollUpdateCb);
             this.isTicking = true;
         }
     }
@@ -205,10 +214,31 @@ class VirtualScroller {
             const isVisible = (i >= startIndex && i <= endIndex);
             const isInDom = node.parentNode === this.container;
 
-            if (isVisible && !isInDom) {
-                this.container.insertBefore(node, this.spacerBottom);
+            if (isVisible) {
+                // Sửa lỗi đảo ngược thứ tự tin nhắn khi cuộn lên:
+                // Tìm DOM node kế tiếp hợp lệ có index > i đang gắn trên container
+                let nextNode = this.spacerBottom;
+                for (let k = i + 1; k < totalCount; k++) {
+                    const candidate = this.messageNodes.get(k);
+                    if (candidate && candidate.parentNode === this.container) {
+                        nextNode = candidate;
+                        break;
+                    }
+                }
+
+                if (!isInDom) {
+                    this.container.insertBefore(node, nextNode);
+                } else if (node.nextSibling !== nextNode) {
+                    // Đảm bảo đúng thứ tự tuyệt đối trên DOM
+                    this.container.insertBefore(node, nextNode);
+                }
             } else if (!isVisible && isInDom) {
                 node.remove();
+                if (typeof this.onMessageEvicted === 'function') {
+                    try {
+                        this.onMessageEvicted(i, node);
+                    } catch (_) {}
+                }
             }
         }
 

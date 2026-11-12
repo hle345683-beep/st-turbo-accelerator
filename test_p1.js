@@ -8,17 +8,16 @@ const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
 
-// Nạp native addon
-const addonPath = path.resolve(__dirname, 'st_server_addon.node');
-console.log(`[INIT] Nạp addon từ: ${addonPath}`);
-const addon = require(addonPath);
+// Nạp native addon kèm fail-safe fallback shim
+const addon = require('./st-server-addon-shim.js');
+const { getChatPath, getCardPath } = require('./test-fixtures.js');
 
 console.log(`[INIT] Addon Version: ${addon.getAddonVersion()}`);
 console.log(`[INIT] Exported symbols: ${Object.keys(addon).join(', ')}\n`);
 
-// Đường dẫn file dữ liệu thật trên máy Sensei
-const REAL_CHAT_PATH = 'D:\\ST\\SillyTavern\\data\\default-user\\chats\\Genshin Impact · Teyvat3\\Genshin Impact · Teyvat - 2026-11-11@11h15m40s510ms.jsonl';
-const REAL_CARD_PATH = 'D:\\ST\\SillyTavern\\data\\default-user\\characters\\Genshin Impact · Teyvat3.png';
+// Đường dẫn file dữ liệu (Hỗ trợ máy cá nhân và fixture độc lập)
+const REAL_CHAT_PATH = getChatPath('D:\\ST\\SillyTavern\\data\\default-user\\chats\\Genshin Impact · Teyvat3\\Genshin Impact · Teyvat - 2026-11-11@11h15m40s510ms.jsonl');
+const REAL_CARD_PATH = getCardPath('D:\\ST\\SillyTavern\\data\\default-user\\characters\\Genshin Impact · Teyvat3.png');
 
 // Thư mục tạm test an toàn (Blast Radius isolation)
 const TEST_DIR = path.resolve(__dirname, 'test_sandbox_p1');
@@ -140,7 +139,9 @@ runTest('Benchmark Append-Only Delta Write (< 0.2ms mục tiêu)', () => {
     const newMsgJson = JSON.stringify(newMessage);
 
     // Warm-up
-    addon.appendMessageDelta(TEST_CHAT_COPY, newMsgJson);
+    for (let w = 0; w < 3; w++) {
+        addon.appendMessageDelta(TEST_CHAT_COPY, newMsgJson);
+    }
 
     // Chạy benchmark 20 lượt ghi delta vào file 34MB
     const ITERATIONS = 20;

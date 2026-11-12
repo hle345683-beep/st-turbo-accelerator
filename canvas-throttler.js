@@ -74,10 +74,15 @@ class CanvasThrottler {
         this.originalRAF = window.requestAnimationFrame;
         this.originalCAF = window.cancelAnimationFrame ? window.cancelAnimationFrame : null;
 
+        // Cung cấp tham chiếu rAF gốc an toàn cho các tác vụ quan trọng (như DOM Virtual Scroller)
+        // để tuyệt đối không bị deadlock khi Canvas trôi ngoài viewport
+        window.__ST_RUST_ORIGINAL_RAF = this.originalRAF;
+        window.__ST_RUST_NATIVE_RAF = this.originalRAF;
+
         const self = this;
 
         window.requestAnimationFrame = function (callback) {
-            if (!self.isEnabled) {
+            if (!self.isEnabled || (callback && (callback.__st_unthrottled || callback.__st_scroller))) {
                 return self.originalRAF.call(window, callback);
             }
             return self.boundHandleRAF(callback);
@@ -101,7 +106,8 @@ class CanvasThrottler {
     handleRequestAnimationFrame(callback) {
         if (typeof callback !== 'function') return 0;
 
-        if (this.canvasRegistry.size === 0) {
+        // Bỏ qua điều tốc nếu callback được đánh dấu miễn trừ hoặc không có canvas nào tồn tại
+        if (callback.__st_unthrottled || callback.__st_scroller || this.canvasRegistry.size === 0) {
             return this.originalRAF.call(window, callback);
         }
 

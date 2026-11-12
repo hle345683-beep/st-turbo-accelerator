@@ -135,9 +135,9 @@ function pruneCharactersInMemory() {
 /**
  * Installs fetch interceptor for character loading and chat history endpoints.
  */
-function initNetworkInterceptor() {
+function initNetworkInterceptor(force = false) {
     if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
-    if (originalFetch) return;
+    if (originalFetch && !force) return;
 
     originalFetch = window.fetch;
 
@@ -201,9 +201,15 @@ function initNetworkInterceptor() {
                     totalInterceptedChats++;
                     saveTelemetryStorage();
 
-                    if (chatArray[0] && isWasmReady()) {
-                        const line0Str = JSON.stringify(chatArray[0]);
-                        storeLine0InVault(line0Str);
+                    if (isWasmReady()) {
+                        if (chatArray[0]) {
+                            const line0Str = JSON.stringify(chatArray[0]);
+                            storeLine0InVault(line0Str);
+                        }
+                        // Nén toàn bộ lịch sử tin nhắn cũ (1..N) vào WASM LZ4 Vault
+                        for (let i = 1; i < chatArray.length; i++) {
+                            storeMessageInVault(i, chatArray[i]);
+                        }
                     }
 
                     for (let i = 0; i < chatArray.length; i++) {
@@ -475,7 +481,24 @@ async function initExtension() {
     if (typeof document !== 'undefined') {
         scrollerInstance = new VirtualScroller('#chat', {
             maxVisibleItems: 18,
-            estimatedItemHeight: 120
+            estimatedItemHeight: 120,
+            onMessageEvicted: (mesId) => {
+                if (isWasmReady()) {
+                    try {
+                        let chat = null;
+                        if (typeof SillyTavern !== 'undefined' && SillyTavern.getContext) {
+                            const ctx = SillyTavern.getContext();
+                            chat = ctx ? ctx.chat : null;
+                        }
+                        if (!chat && typeof window !== 'undefined' && window.chat) {
+                            chat = window.chat;
+                        }
+                        if (Array.isArray(chat) && chat[mesId]) {
+                            storeMessageInVault(mesId, chat[mesId]);
+                        }
+                    } catch (_) {}
+                }
+            }
         });
         scrollerInstance.init();
 

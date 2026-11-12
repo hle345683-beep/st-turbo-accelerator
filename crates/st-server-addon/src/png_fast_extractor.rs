@@ -159,6 +159,38 @@ pub fn extract_character_card(
     // (nhanh hơn parse cả cây AST 17.5MB gấp 50 lần)
     let (card_name, card_desc) = extract_name_and_desc_fast(&data_json);
 
+    // Cắt tỉa json_data khổng lồ nếu được yêu cầu (Shield 2)
+    let (final_data_json, did_strip) = if should_strip {
+        if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&data_json) {
+            let mut modified = false;
+            if let Some(obj) = val.as_object_mut() {
+                if let Some(jd) = obj.get_mut("json_data") {
+                    if jd.is_string() {
+                        *jd = serde_json::Value::String(String::new());
+                        modified = true;
+                    }
+                }
+                if let Some(data_obj) = obj.get_mut("data").and_then(|d| d.as_object_mut()) {
+                    if let Some(jd) = data_obj.get_mut("json_data") {
+                        if jd.is_string() {
+                            *jd = serde_json::Value::String(String::new());
+                            modified = true;
+                        }
+                    }
+                }
+            }
+            if modified {
+                (serde_json::to_string(&val).unwrap_or_else(|_| data_json.clone()), true)
+            } else {
+                (data_json, false)
+            }
+        } else {
+            (data_json, false)
+        }
+    } else {
+        (data_json, false)
+    };
+
     let duration = start_time.elapsed().as_secs_f64() * 1000.0;
 
     Ok(ExtractedCardResult {
@@ -168,7 +200,7 @@ pub fn extract_character_card(
         description: card_desc,
         raw_json_data_bytes: raw_payload_len,
         stripped_json_data: should_strip,
-        data_json,
+        data_json: final_data_json,
         duration_ms: duration,
     })
 }

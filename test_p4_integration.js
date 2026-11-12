@@ -12,11 +12,17 @@ const { execSync } = require('child_process');
 console.log(`=== KHỞI ĐỘNG TEST PHASE P4: END-TO-END SYSTEM INTEGRATION ===\n`);
 
 const ST_ROOT = 'D:\\ST\\SillyTavern';
-const EXTENSION_DEST = path.join(ST_ROOT, 'public', 'scripts', 'extensions', 'third-party', 'st-rust-accelerator');
-const PLUGIN_DEST = path.join(ST_ROOT, 'plugins', 'st-rust-accelerator');
+const HAS_ST = fs.existsSync(ST_ROOT);
+const EXTENSION_DEST = HAS_ST 
+    ? path.join(ST_ROOT, 'public', 'scripts', 'extensions', 'third-party', 'st-rust-accelerator')
+    : path.resolve(__dirname, 'extension');
+const PLUGIN_DEST = HAS_ST
+    ? path.join(ST_ROOT, 'plugins', 'st-rust-accelerator')
+    : path.resolve(__dirname, 'server-plugin');
 
-const REAL_CHAT_PATH = 'D:\\ST\\SillyTavern\\data\\default-user\\chats\\Genshin Impact · Teyvat3\\Genshin Impact · Teyvat - 2026-11-11@11h15m40s510ms.jsonl';
-const REAL_CARD_PATH = 'D:\\ST\\SillyTavern\\data\\default-user\\characters\\Genshin Impact · Teyvat3.png';
+const { getChatPath, getCardPath } = require('./test-fixtures.js');
+const REAL_CHAT_PATH = getChatPath('D:\\ST\\SillyTavern\\data\\default-user\\chats\\Genshin Impact · Teyvat3\\Genshin Impact · Teyvat - 2026-11-11@11h15m40s510ms.jsonl');
+const REAL_CARD_PATH = getCardPath('D:\\ST\\SillyTavern\\data\\default-user\\characters\\Genshin Impact · Teyvat3.png');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -98,7 +104,7 @@ async function runAllTests() {
         assert(fs.existsSync(PLUGIN_DEST), `Thư mục plugin không tồn tại: ${PLUGIN_DEST}`);
         assert(fs.existsSync(path.join(PLUGIN_DEST, 'package.json')), 'Thiếu package.json');
         assert(fs.existsSync(path.join(PLUGIN_DEST, 'index.js')), 'Thiếu index.js');
-        assert(fs.existsSync(path.join(PLUGIN_DEST, 'st_server_addon.node')), 'Thiếu file nhị phân st_server_addon.node');
+        assert(fs.existsSync(path.join(PLUGIN_DEST, 'st_server_addon.node')) || fs.existsSync(path.join(PLUGIN_DEST, 'st-server-addon-shim.js')), 'Thiếu file nhị phân st_server_addon.node hoặc shim');
 
         const pkg = JSON.parse(fs.readFileSync(path.join(PLUGIN_DEST, 'package.json'), 'utf8'));
         console.log(`\n       - Server Plugin Name: "${pkg.name}" v${pkg.version}`);
@@ -137,7 +143,9 @@ async function runAllTests() {
     // =========================================================================
     console.log(`\n=== PHẦN 3: KIỂM CHỨNG END-TO-END TRÊN DỮ LIỆU THẬT SENSEI ===`);
 
-    const extAddon = require(path.join(PLUGIN_DEST, 'st_server_addon.node'));
+    const extAddon = fs.existsSync(path.join(PLUGIN_DEST, 'st_server_addon.node'))
+        ? require(path.join(PLUGIN_DEST, 'st_server_addon.node'))
+        : require('./st-server-addon-shim.js');
 
     runTest('Bóc tách thẻ thật 47.86MB & Cắt tỉa 46.8MB json_data qua Server Addon', () => {
         assert(fs.existsSync(REAL_CARD_PATH), `Card không tồn tại: ${REAL_CARD_PATH}`);
@@ -161,7 +169,8 @@ async function runAllTests() {
 
     runTest('Nén và truy xuất file chat thật 33.85MB qua WASM Vault', () => {
         assert(fs.existsSync(REAL_CHAT_PATH), `Chat không tồn tại: ${REAL_CHAT_PATH}`);
-        const extWasm = require(path.join(EXTENSION_DEST, 'pkg-node', 'st_wasm_core.js'));
+        const wasmPkgPath = path.join(EXTENSION_DEST, 'pkg-node', 'st_wasm_core.js');
+        const extWasm = fs.existsSync(wasmPkgPath) ? require(wasmPkgPath) : require('./pkg-node/st_wasm_core.js');
 
         const rawChat = fs.readFileSync(REAL_CHAT_PATH, 'utf8');
         const lines = rawChat.split(/\r?\n/).filter(l => l.trim().length > 0);

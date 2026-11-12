@@ -1,19 +1,19 @@
 /**
- * Proxy Variable Guard & Copy-on-Write (CoW) Virtualization.
- * Prevents redundant deep cloning of large variable trees (e.g., TavernHelper state),
- * saving approximately 108MB of V8 heap per clone operation.
+ * PROXY-VARIABLE-GUARD.JS — COPY-ON-WRITE (CoW) VIRTUALIZATION ENGINE
+ * Dự án: ST-RUST-ACCELERATOR / ST-TURBO-ACCELERATOR
+ * 
+ * Ngăn chặn nhân bản sâu (deep clone) mù quáng các cây biến dữ liệu khổng lồ (như TavernHelper state),
+ * tiết kiệm ~108MB V8 heap cho mỗi thao tác clone, bảo vệ object gốc khỏi đột biến (mutation).
+ * Bổ sung đầy đủ trap deleteProperty, tập hợp deletedKeys, và phương thức commit/toJSON sạch sẽ.
  */
 
-/**
- * Provides lazy Copy-on-Write proxies and snapshot utilities for complex objects.
- */
 class ProxyVariableGuard {
     /**
-     * Wraps a target object with a Copy-on-Write Proxy.
-     * Reads are zero-allocation; writes are isolated in local mutation maps without modifying the base object.
+     * Bọc một đối tượng mục tiêu bằng Proxy Copy-on-Write (CoW).
+     * Thao tác đọc là Zero-Allocation; thao tác ghi/xóa được cô lập trong Map/Set cục bộ.
      *
-     * @param {Object} target - The source object to wrap
-     * @returns {Proxy|Object} Wrapped CoW proxy or original primitive
+     * @param {Object} target - Đối tượng nguồn cần bảo vệ
+     * @returns {Proxy|Object} CoW proxy hoặc giá trị nguyên thủy
      */
     static createCoWProxy(target) {
         if (!target || typeof target !== 'object') {
@@ -21,14 +21,36 @@ class ProxyVariableGuard {
         }
 
         const modifications = new Map();
+        const deletedKeys = new Set();
         const childProxies = new Map();
+
+        let proxyInstance = null;
 
         const handler = {
             get(obj, prop) {
+                // Trap các thuộc tính / phương thức đặc biệt
+                if (prop === '__isCoWProxy') return true;
+                if (prop === '__target') return obj;
+                if (prop === '__modifications') return modifications;
+                if (prop === '__deletedKeys') return deletedKeys;
+                if (prop === 'commit' || prop === '__commit') {
+                    return () => ProxyVariableGuard.commit(proxyInstance);
+                }
+                if (prop === 'toJSON') {
+                    return () => ProxyVariableGuard.commit(proxyInstance);
+                }
+
+                // Nếu khóa đã bị xóa
+                if (deletedKeys.has(prop)) {
+                    return undefined;
+                }
+
+                // Nếu khóa có giá trị sửa đổi
                 if (modifications.has(prop)) {
                     return modifications.get(prop);
                 }
 
+                // Nếu đã bọc proxy con
                 if (childProxies.has(prop)) {
                     return childProxies.get(prop);
                 }
@@ -43,22 +65,43 @@ class ProxyVariableGuard {
             },
 
             set(obj, prop, value) {
+                // Hủy trạng thái xóa nếu gán lại giá trị
+                deletedKeys.delete(prop);
                 childProxies.delete(prop);
                 modifications.set(prop, value);
                 return true;
             },
 
+            deleteProperty(obj, prop) {
+                // Trap deleteProperty: Ghi nhận vào deletedKeys mà KHÔNG chạm vào target gốc
+                if (modifications.has(prop)) {
+                    modifications.delete(prop);
+                }
+                if (childProxies.has(prop)) {
+                    childProxies.delete(prop);
+                }
+                deletedKeys.add(prop);
+                return true;
+            },
+
             has(obj, prop) {
+                if (deletedKeys.has(prop)) return false;
                 if (modifications.has(prop) || childProxies.has(prop)) return true;
                 return Reflect.has(obj, prop);
             },
 
             ownKeys(obj) {
                 const keys = new Set([...Reflect.ownKeys(obj), ...modifications.keys()]);
+                for (const dk of deletedKeys) {
+                    keys.delete(dk);
+                }
                 return Array.from(keys);
             },
 
             getOwnPropertyDescriptor(obj, prop) {
+                if (deletedKeys.has(prop)) {
+                    return undefined;
+                }
                 if (modifications.has(prop)) {
                     return {
                         value: modifications.get(prop),
@@ -71,14 +114,44 @@ class ProxyVariableGuard {
             }
         };
 
-        return new Proxy(target, handler);
+        proxyInstance = new Proxy(target, handler);
+        return proxyInstance;
     }
 
     /**
-     * Protects a message object by wrapping its variables dictionary in a CoW proxy.
+     * Xuất (commit) dữ liệu CoW Proxy thành một plain Object/Array sạch,
+     * loại bỏ hoàn toàn các key đã xóa và hòa nhập tất cả sửa đổi mà không làm biến đổi object gốc.
      *
-     * @param {Object} msg - The chat message object
-     * @returns {Object} Message with protected variables
+     * @param {*} proxyOrObj - Đối tượng hoặc CoW Proxy
+     * @returns {*} Plain JavaScript object/array
+     */
+    static commit(proxyOrObj) {
+        if (!proxyOrObj || typeof proxyOrObj !== 'object') {
+            return proxyOrObj;
+        }
+
+        const isArr = Array.isArray(proxyOrObj);
+        const result = isArr ? [] : {};
+
+        // Lấy toàn bộ keys hợp lệ (ownKeys đã tự động lọc deletedKeys và gộp modifications)
+        const keys = Object.keys(proxyOrObj);
+        for (const key of keys) {
+            const val = proxyOrObj[key];
+            if (val && typeof val === 'object' && !(val instanceof Date) && !(val instanceof RegExp)) {
+                result[key] = ProxyVariableGuard.commit(val);
+            } else {
+                result[key] = val;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Bảo vệ tin nhắn chat bằng cách bọc cây `variables` trong CoW Proxy.
+     *
+     * @param {Object} msg - Chat message object
+     * @returns {Object} Message đã được bảo vệ variables
      */
     static protectMessage(msg) {
         if (!msg || typeof msg !== 'object') return msg;
@@ -89,7 +162,7 @@ class ProxyVariableGuard {
     }
 
     /**
-     * Creates a shallow snapshot dictionary to avert recursive cloning over massive metadata.
+     * Tạo bản snapshot nông (shallow snapshot) chống đệ quy nhân bản trên metadata khổng lồ.
      *
      * @param {Object} largeMetadata - Large metadata container
      * @returns {Object} Safe shallow snapshot

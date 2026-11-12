@@ -16,9 +16,10 @@ const wasm = require(wasmPath);
 console.log(`[INIT] WASM Core Version: ${wasm.get_wasm_core_version()}`);
 console.log(`[INIT] Exported symbols: ${Object.keys(wasm).join(', ')}\n`);
 
-// 2. Đường dẫn file dữ liệu thật trên máy Sensei
-const REAL_CHAT_PATH = 'D:\\ST\\SillyTavern\\data\\default-user\\chats\\Genshin Impact · Teyvat3\\Genshin Impact · Teyvat - 2026-11-11@11h15m40s510ms.jsonl';
-const REAL_WORLDBOOK_PATH = 'D:\\tao card ST\\卡与插件与世界书\\Genshin_Impact_Teyvat_P160_Vi.json';
+// 2. Đường dẫn file dữ liệu (Hỗ trợ máy cá nhân và fixture độc lập)
+const { getChatPath, getWorldbookPath } = require('./test-fixtures.js');
+const REAL_CHAT_PATH = getChatPath('D:\\ST\\SillyTavern\\data\\default-user\\chats\\Genshin Impact · Teyvat3\\Genshin Impact · Teyvat - 2026-11-11@11h15m40s510ms.jsonl');
+const REAL_WORLDBOOK_PATH = getWorldbookPath('D:\\tao card ST\\卡与插件与世界书\\Genshin_Impact_Teyvat_P160_Vi.json');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -219,8 +220,10 @@ runTest('Benchmark Quét Từ Khóa trên văn bản lớn 35.000 ký tự (< 0.
     `;
     const bigHaystack = singleMsg.repeat(50); // ~35,000 ký tự
 
-    // Warm-up
-    wasm.scan_worldbook_text(bigHaystack);
+    // Warm-up V8 JIT & WASM boundary
+    for (let w = 0; w < 5; w++) {
+        wasm.scan_worldbook_text(bigHaystack);
+    }
 
     const RUNS = 20;
     const times = [];

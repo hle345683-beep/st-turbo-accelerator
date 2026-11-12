@@ -29,23 +29,27 @@ struct WorldbookMatcher {
 
 static MATCHER: Mutex<Option<WorldbookMatcher>> = Mutex::new(None);
 
-/// Kiểm tra ký tự byte có phải là word boundary char không (giống \b của RegExp)
+/// Kiểm tra ký tự Unicode có phải là word character (chữ cái mọi ngôn ngữ gồm Tiếng Việt, số hoặc gạch dưới)
 #[inline(always)]
-fn is_word_char(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
+fn is_unicode_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
 }
 
-/// Kiểm tra ranh giới từ (word boundary) cho từ đơn
+/// Kiểm tra ranh giới từ (word boundary) chuẩn Unicode cho từ đơn
 #[inline(always)]
-fn check_word_boundary(bytes: &[u8], start: usize, end: usize) -> bool {
+fn check_unicode_word_boundary(haystack: &str, start: usize, end: usize) -> bool {
     if start > 0 {
-        if is_word_char(bytes[start - 1]) {
-            return false;
+        if let Some(prev_char) = haystack[..start].chars().next_back() {
+            if is_unicode_word_char(prev_char) {
+                return false;
+            }
         }
     }
-    if end < bytes.len() {
-        if is_word_char(bytes[end]) {
-            return false;
+    if end < haystack.len() {
+        if let Some(next_char) = haystack[end..].chars().next() {
+            if is_unicode_word_char(next_char) {
+                return false;
+            }
         }
     }
     true
@@ -171,8 +175,6 @@ pub fn scan_worldbook_text(haystack: &str) -> Vec<u32> {
     };
 
     let haystack_lower = haystack.to_lowercase();
-    let bytes = haystack_lower.as_bytes();
-
     let mut matched_entries = BTreeSet::new();
 
     for mat in matcher.ac.find_iter(&haystack_lower) {
@@ -180,7 +182,7 @@ pub fn scan_worldbook_text(haystack: &str) -> Vec<u32> {
         if let Some(entries) = matcher.pattern_map.get(pattern_idx) {
             for &(entry_id, is_single_word) in entries {
                 if is_single_word {
-                    if check_word_boundary(bytes, mat.start(), mat.end()) {
+                    if check_unicode_word_boundary(&haystack_lower, mat.start(), mat.end()) {
                         matched_entries.insert(entry_id);
                     }
                 } else {

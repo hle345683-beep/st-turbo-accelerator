@@ -12,7 +12,12 @@ try {
     addon = require(addonPath);
     console.log(`[ST-Rust-Server] Native Addon v${addon.getAddonVersion()} loaded successfully.`);
 } catch (e) {
-    console.warn('[ST-Rust-Server] Failed to load st_server_addon.node (JS Fallback active):', e);
+    try {
+        addon = require('./st-server-addon-shim.js');
+        console.log(`[ST-Rust-Server] Addon Shim v${addon.getAddonVersion()} loaded successfully.`);
+    } catch (_) {
+        console.warn('[ST-Rust-Server] Failed to load st_server_addon.node (JS Fallback active):', e);
+    }
 }
 
 export const info = {
